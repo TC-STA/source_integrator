@@ -1,32 +1,32 @@
-name: 打包成EXE
+name: 多平台打包
 
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v5
-
-      - name: 设置 Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-
+      
+      # ⬇️ 关键：安装项目依赖
       - name: 安装依赖
         run: |
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
           pip install pyinstaller
-
-      - name: 打包为单文件EXE
-        run: pyinstaller -F --add-data "1.jpg;." source_integrator.py
-
-      - name: 上传EXE成品
-        uses: actions/upload-artifact@v4
+        shell: bash
+      
+      - name: 打包程序
+        run: pyinstaller -F 你的文件名.py
+      
+      - uses: actions/upload-artifact@v4
         with:
-          name: 打包好的程序
-          path: dist/*.exe
+          name: 程序-${{ matrix.os }}
+          path: dist/*
