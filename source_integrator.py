@@ -113,7 +113,7 @@ def generate_tree(dir_path: Path, prefix: str = "", skip_dirs: set = None) -> li
 def Introducing_the_usage_of_the_program():
     print("="*80)
     print("By TC_STA")
-    print("1.0.2")
+    print("1.0.6")
     print("="*80)
     print("""
 源码文件整合工具（支持所有文件类型）
