@@ -23,7 +23,7 @@ jobs:
           pip install pyinstaller
 
       - name: 打包为单文件EXE
-        run: pyinstaller -F source_integrator.py
+        run: pyinstaller -F --add-data "1.jpg;." source_integrator.py
 
       - name: 上传EXE成品
         uses: actions/upload-artifact@v4
