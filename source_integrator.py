@@ -3,6 +3,8 @@
 
 import os
 import sys
+import platform
+import subprocess
 from pathlib import Path
 from datetime import datetime
 import mimetypes
@@ -111,7 +113,7 @@ def generate_tree(dir_path: Path, prefix: str = "", skip_dirs: set = None) -> li
 def Introducing_the_usage_of_the_program():
     print("="*80)
     print("By TC_STA")
-    print("1.0")
+    print("1.0.2")
     print("="*80)
     print("""
 源码文件整合工具（支持所有文件类型）
@@ -132,7 +134,7 @@ def main():
     src_path = input("请输入源码文件夹路径（可直接粘贴）: ").strip()
     if src_path == "0":
             print("程序已退出")
-            return 0
+            sys.exit(0)
     if src_path.startswith(('"', "'")) and src_path.endswith(('"', "'")):
         src_path = src_path[1:-1]
     src_dir = Path(src_path).resolve()
@@ -245,7 +247,19 @@ def main():
     print("按回车退出...")
     input()
 
+def clear_screen():
+    """
+    跨平台清屏函数：Windows 用 'cls'，Linux/Mac 用 'clear'
+    """
+    # 如果是 Windows 系统
+    if platform.system() == 'Windows':
+        os.system('cls')
+    # 如果是 Linux 或 macOS 系统
+    else:
+        os.system('clear')
 
 if __name__ == "__main__":
-    Introducing_the_usage_of_the_program()
-    main()
+    while True:
+        Introducing_the_usage_of_the_program()
+        main()#主函数
+        clear_screen()#清理屏幕
