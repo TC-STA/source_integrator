@@ -20,7 +20,7 @@ jobs:
         shell: bash
 
       - name: 打包程序
-        run: pyinstaller -F source_integrator.py
+        run: pyinstaller -F -n 整合工具 source_integrator.py
 
       - uses: actions/upload-artifact@v4
         with:
