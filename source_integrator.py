@@ -45,7 +45,8 @@ def clear_screen():
 # ---------- 版本检测 ----------
 def check_update():
     """启动时联网检测是否有新版本"""
-    os.system("")  # 启用 ANSI 颜色支持
+    if sys.platform.startswith('win'):
+        os.system("")  # 启用 ANSI 颜色支持
     try:
         ctx = ssl._create_unverified_context()
         with urllib.request.urlopen(VERSION_CHECK_URL, timeout=5, context=ctx) as resp:
