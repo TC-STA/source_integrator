@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# TC_STA
 
 import os
 import sys
 import urllib.request
+import urllib.error
 import ssl
+import time
+import shutil
+import tempfile
+import zipfile
+import io
 from pathlib import Path
 from datetime import datetime
 
-LOCAL_VERSION = "1.10"          # 版本
-VERSION_CHECK_URL = "https://gist.githubusercontent.com/TC-STA/51746f15c16389c34b871e0c95672411/raw/a671a76478cdf1cd23cebee8c20d8fa3b2aa49f2/version.txt"   
-
-UPDATE_DOWNLOAD_URL = "https://github.com/TC-STA/source_integrator/releases" #下载地址
+LOCAL_VERSION = "2.0.0"          # 版本更新
+VERSION_CHECK_URL = "https://gitee.com/TC_STA/version/raw/master/version.txt"
+UPDATE_DOWNLOAD_URL = "https://github.com/TC-STA/source_integrator/releases"
 
 # 默认要跳过的文件夹
 DEFAULT_SKIP_DIRS = {'build', '.git', '__pycache__', 'node_modules', '.gradle', '.idea', 'venv', 'env', 'dist'}
@@ -30,25 +36,36 @@ DEFAULT_EXCLUDE_EXT = {
     '.npy', '.npz',
 }
 
-# ---------- 版本检测函数（自动运行） ----------
+def clear_screen():
+    if sys.platform == 'win32':
+        os.system('cls')
+    else:
+        os.system('clear')
+
+# ---------- 版本检测 ----------
 def check_update():
-    """启动时联网检测是否有新版本，如果有就打印提示，没有或网络不通就静默跳过"""
+    """启动时联网检测是否有新版本"""
     try:
-        # 创建不验证SSL证书的上下文
         ctx = ssl._create_unverified_context()
         with urllib.request.urlopen(VERSION_CHECK_URL, timeout=5, context=ctx) as resp:
             remote_version = resp.read().decode('utf-8').strip()
-        # 比较版本号
+        print("\033[33m香香软软的管理员:\033[0m" + "\033[96;40m正在检测是否有新版本...\033[0m")
+        time.sleep(2)
+        if remote_version == LOCAL_VERSION:
+            print("\033[33m香香软软的管理员:\033[0m" + "\033[96;40m暂无发现新版本ε٩(๑> ₃ <)۶з\033[0m")
+            time.sleep(2)
+            clear_screen()
+            return
         if remote_version > LOCAL_VERSION:
             print("\n" + "=" * 60)
+            print("\033[33m香香软软的管理员:\033[0m" + "快去给我下" + "\033[31m杂鱼(｡•ˇ‸ˇ•｡)\033[0m")
             print(f"🔔 发现新版本：{remote_version}（当前版本：{LOCAL_VERSION}）")
             print(f"请前往下载：{UPDATE_DOWNLOAD_URL}")
             print("=" * 60 + "\n")
     except Exception:
-        # 任何错误都静默跳过，不影响正常使用
         pass
 
-# ---------- 以下是原有的整合功能  ----------
+# ---------- 工具函数 ----------
 def is_binary_file(file_path: Path, sample_size: int = 1024) -> bool:
     try:
         with open(file_path, 'rb') as f:
@@ -108,33 +125,136 @@ def generate_tree(dir_path: Path, prefix: str = "", skip_dirs: set = None) -> li
             lines.append(f"{prefix}{connector}{item.name}")
     return lines
 
-def Introducing_the_usage_of_the_program():
+def parse_github_url(url: str) -> tuple:
+    """
+    解析 GitHub URL，返回 (owner, repo, branch)。
+    支持格式：
+        https://github.com/owner/repo
+        https://github.com/owner/repo.git
+        https://github.com/owner/repo/tree/branch
+    如果未指定分支，默认使用 'main'。
+    """
+    url = url.rstrip('/').rstrip('.git')
+    parts = url.split('/')
+    if 'github.com' not in parts:
+        raise ValueError("不是有效的 GitHub URL")
+    try:
+        idx = parts.index('github.com')
+        owner = parts[idx + 1]
+        repo = parts[idx + 2]
+        branch = 'main'  # 默认分支
+        if len(parts) > idx + 3 and parts[idx + 3] == 'tree':
+            branch = '/'.join(parts[idx + 4:])  # 可能嵌套路径
+        return owner, repo, branch
+    except (ValueError, IndexError):
+        raise ValueError("GitHub URL 格式错误，应为 https://github.com/owner/repo")
+
+def download_with_progress(url: str, dest_path: str):
+    """下载文件并显示简易进度条"""
+    ctx = ssl._create_unverified_context()
+    with urllib.request.urlopen(url, context=ctx) as response:
+        total = int(response.getheader('Content-Length', 0))
+        block_size = 8192
+        downloaded = 0
+        print(f"开始下载（{get_file_size_str(total) if total else '未知大小'}）...")
+        with open(dest_path, 'wb') as f:
+            while True:
+                chunk = response.read(block_size)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total > 0:
+                    percent = downloaded * 100 // total
+                    bar_len = 40
+                    filled = int(bar_len * percent / 100)
+                    bar = '█' * filled + '░' * (bar_len - filled)
+                    print(f"\r进度: |{bar}| {percent:3d}%", end='', flush=True)
+        print()  # 换行
+
+def download_and_extract_github_repo(url: str, temp_dir: str) -> Path:
+    """
+    下载并解压 GitHub 仓库，返回解压后的根目录路径。
+    """
+    owner, repo, branch = parse_github_url(url)
+    zip_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
+    zip_file = os.path.join(temp_dir, f"{repo}.zip")
+    print(f"正在下载 {owner}/{repo} 的 {branch} 分支...")
+    download_with_progress(zip_url, zip_file)
+    print("下载完成，正在解压...")
+    with zipfile.ZipFile(zip_file, 'r') as zf:
+        zf.extractall(temp_dir)
+    # 解压后通常是一个 {repo}-{branch} 目录
+    extracted_name = f"{repo}-{branch}"
+    extracted_path = os.path.join(temp_dir, extracted_name)
+    if not os.path.isdir(extracted_path):
+        # 尝试查找第一个子目录
+        for item in os.listdir(temp_dir):
+            item_path = os.path.join(temp_dir, item)
+            if os.path.isdir(item_path):
+                extracted_path = item_path
+                break
+    return Path(extracted_path)
+
+# ---------- 使用说明 ----------
+def print_intro():
     print("=" * 80)
-    print("源码文件整合工具 (By TC_STA) 版本", LOCAL_VERSION)
+    print(f"源码文件整合工具 (By TC_STA)  版本 {LOCAL_VERSION}")
     print("=" * 80)
     print("""
-功能：
-1. 生成项目文件夹树形结构
-2. 智能读取所有文件内容（文本显示，二进制仅显示文件名）
-3. 输出文件大小排行榜
-4. 支持屏蔽 build 等文件夹
-5. 支持自定义过滤文件后缀
-选项: 输入 0 退出
-""")
+【功能说明】
+  本工具可将整个项目源码（本地或 GitHub 远程仓库）整合为一个文本文件，
+  方便输入给大语言模型（如 ChatGPT）进行代码分析或问答。
 
+  ✨ 新功能：支持直接输入 GitHub 仓库链接，自动下载并整合！
+  
+【使用方式】
+  1. 输入本地文件夹路径 → 分析本地项目
+  2. 输入 GitHub 仓库链接 → 自动下载、解压并分析
+     格式示例：
+       • https://github.com/owner/repo
+       • https://github.com/owner/repo/tree/main
+  3. 屏蔽文件夹：默认屏蔽 build、.git 等，可按需调整
+  4. 过滤文件后缀：图片、音频、二进制等默认不读取内容
+  5. 生成文件：在源码目录（或临时目录）生成「整合文件.txt」
+  
+【注意事项】
+  - GitHub 仓库下载需要网络，较大仓库可能耗时。
+  - 解压后的临时文件默认不自动删除，整合完成后会提示是否清理。
+  - 输入 0 可随时退出。
+""")
+#qtmdlswl
 def main():
+    os.system("")  # 启用 ANSI 颜色支持
     print("=" * 80)
-    src_path = input("请输入源码文件夹路径（可直接粘贴，输入 0 退出）: ").strip()
-    if src_path == "0":
+    src_input = input("请输入源码文件夹路径 或 GitHub 仓库链接 (输入 0 退出): ").strip()
+    if src_input == "0":
         print("程序已退出")
         sys.exit(0)
-    if src_path.startswith(('"', "'")) and src_path.endswith(('"', "'")):
-        src_path = src_path[1:-1]
-    src_dir = Path(src_path).resolve()
-    if not src_dir.exists() or not src_dir.is_dir():
-        print(f"错误：路径不存在或不是文件夹 -> {src_dir}")
-        sys.exit(1)
 
+    # 去除首尾引号
+    if src_input.startswith(('"', "'")) and src_input.endswith(('"', "'")):
+        src_input = src_input[1:-1]
+
+    # 判断是 GitHub URL 还是本地路径
+    is_github = 'github.com' in src_input
+    temp_dir = None
+    src_dir = None
+
+    if is_github:
+        temp_dir = tempfile.mkdtemp(prefix="source_integrator_")
+        try:
+            src_dir = download_and_extract_github_repo(src_input, temp_dir)
+        except Exception as e:
+            print(f"错误：下载或解析 GitHub 仓库失败 - {e}")
+            sys.exit(1)
+    else:
+        src_dir = Path(src_input).resolve()
+        if not src_dir.exists() or not src_dir.is_dir():
+            print(f"错误：路径不存在或不是文件夹 -> {src_dir}")
+            sys.exit(1)
+
+    # 后续配置
     skip_build = input("是否屏蔽 build 文件夹？(y/n，默认 y): ").strip().lower() != 'n'
     skip_dirs = set(DEFAULT_SKIP_DIRS)
     if not skip_build:
@@ -157,6 +277,7 @@ def main():
     print("\n注意：本工具将智能检测所有文件内容，二进制文件只显示文件名。")
     input("\n按回车开始整合...")
 
+    # 扫描文件
     file_info_list = []
     print("正在扫描文件夹...")
     for root, dirs, files in os.walk(src_dir):
@@ -216,18 +337,23 @@ def main():
         out.write("\n" + "=" * 80 + "\n整合完成！\n")
 
     print(f"\n✅ 整合成功！文件已生成：\n{output_file}")
+
+    # 如果是 GitHub 下载，询问是否清理临时文件
+    if temp_dir and os.path.isdir(temp_dir):
+        clean = input("\n是否删除下载的临时文件？(y/n，默认 y): ").strip().lower() != 'n'
+        if clean:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            print("临时文件已清理。")
+        else:
+            print(f"临时文件保留在：{temp_dir}")
+
     input("按回车退出...")
 
-def clear_screen():
-    if sys.platform == 'win32':
-        os.system('cls')
-    else:
-        os.system('clear')
-
 if __name__ == "__main__":
-    # 启动时检测更新
+    clear_screen()
     check_update()
+
     while True:
-        Introducing_the_usage_of_the_program()
+        print_intro()
         main()
         clear_screen()
