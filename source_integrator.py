@@ -15,7 +15,7 @@ import io
 from pathlib import Path
 from datetime import datetime
 
-LOCAL_VERSION = "2.0.0"          # 版本更新
+LOCAL_VERSION = "2.1.0"          # 版本更新
 VERSION_CHECK_URL = "https://gitee.com/TC_STA/version/raw/master/version.txt"
 UPDATE_DOWNLOAD_URL = "https://github.com/TC-STA/source_integrator/releases"
 
