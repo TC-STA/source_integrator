@@ -1,6 +1,5 @@
 # 源码文件整合工具 (Source Integrator by TC_STA) 使用说明
 
-**版本**：2.0.0  
 **作者**：TC_STA  
 **适用平台**：Windows / Linux / macOS（Python 3 环境）
 
