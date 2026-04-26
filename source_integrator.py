@@ -45,6 +45,7 @@ def clear_screen():
 # ---------- 版本检测 ----------
 def check_update():
     """启动时联网检测是否有新版本"""
+    os.system("")  # 启用 ANSI 颜色支持
     try:
         ctx = ssl._create_unverified_context()
         with urllib.request.urlopen(VERSION_CHECK_URL, timeout=5, context=ctx) as resp:
@@ -225,7 +226,6 @@ def print_intro():
 """)
 #qtmdlswl
 def main():
-    os.system("")  # 启用 ANSI 颜色支持
     print("=" * 80)
     src_input = input("请输入源码文件夹路径 或 GitHub 仓库链接 (输入 0 退出): ").strip()
     if src_input == "0":
